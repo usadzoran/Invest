@@ -14,6 +14,19 @@ import {
   CryptoWallet,
   Transaction,
 } from '../types/database';
+import { getSupabase } from './supabase';
+
+// Helper to silently mirror writes to Supabase if configured
+const mirrorToSupabase = async (table: string, payload: any) => {
+  try {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    await supabase.from(table).upsert(payload);
+  } catch (err) {
+    // Non-blocking background sync
+    console.debug('Supabase sync note:', err);
+  }
+};
 
 const STORAGE_KEYS = {
   USERS: 'arb_invest_users',

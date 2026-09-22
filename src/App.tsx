@@ -13,6 +13,7 @@ import { ProfileView } from './views/ProfileView';
 import { AuthModal } from './views/AuthModal';
 import { InvestmentModal } from './views/InvestmentModal';
 import { AdminPreviewModal } from './views/AdminPreviewModal';
+import { SupabaseModal } from './views/SupabaseModal';
 import { Logo } from './components/common/Logo';
 import { ShieldCheck, Database } from 'lucide-react';
 
@@ -28,6 +29,7 @@ export default function App() {
   const [investmentModalOpen, setInvestmentModalOpen] = useState<boolean>(false);
   const [selectedLevel, setSelectedLevel] = useState<InvestmentLevel | null>(null);
   const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false);
+  const [supabaseModalOpen, setSupabaseModalOpen] = useState<boolean>(false);
 
   // Sync state from storage
   const refreshData = useCallback(() => {
@@ -169,6 +171,7 @@ export default function App() {
         onNavigate={setCurrentTab}
         onOpenAuth={handleOpenAuth}
         onLogout={handleLogout}
+        onOpenSupabase={() => setSupabaseModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -198,13 +201,23 @@ export default function App() {
           <div className="flex items-center gap-4 text-[11px]">
             <span className="text-slate-400">INVEST • GROW • PROFIT</span>
             <span className="text-slate-700">|</span>
+            {/* Supabase Connection Button */}
+            <button
+              onClick={() => setSupabaseModalOpen(true)}
+              className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors cursor-pointer font-medium"
+              title="إعدادات واتصال قاعدة بيانات Supabase"
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span>ربط Supabase</span>
+            </button>
+            <span className="text-slate-700">|</span>
             {/* Discreet Admin Architecture Inspector Button */}
             <button
               onClick={() => setAdminModalOpen(true)}
               className="text-slate-400 hover:text-amber-400 flex items-center gap-1 transition-colors cursor-pointer"
               title="معاينة بنية لوحة الإدارة وقواعد البيانات لـ Supabase"
             >
-              <Database className="w-3.5 h-3.5" />
+              <ShieldCheck className="w-3.5 h-3.5" />
               <span>هيكل الإدارة (Admin DB)</span>
             </button>
           </div>
@@ -242,6 +255,13 @@ export default function App() {
         isOpen={adminModalOpen}
         onClose={() => setAdminModalOpen(false)}
         onRefreshData={refreshData}
+      />
+
+      {/* Supabase Connection & Schema Modal */}
+      <SupabaseModal
+        isOpen={supabaseModalOpen}
+        onClose={() => setSupabaseModalOpen(false)}
+        onConnected={refreshData}
       />
     </div>
   );

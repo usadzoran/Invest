@@ -1,7 +1,8 @@
 import React from 'react';
 import { Logo } from './Logo';
 import { User, Profile } from '../../types/database';
-import { Wallet, User as UserIcon, LogOut, ArrowRightLeft, ShieldCheck } from 'lucide-react';
+import { Wallet, User as UserIcon, LogOut, ArrowRightLeft, ShieldCheck, Database } from 'lucide-react';
+import { getSupabaseConfig } from '../../services/supabase';
 
 interface NavbarProps {
   currentUser: User | null;
@@ -10,6 +11,7 @@ interface NavbarProps {
   onNavigate: (tab: string) => void;
   onOpenAuth: (mode: 'login' | 'register') => void;
   onLogout: () => void;
+  onOpenSupabase: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -19,7 +21,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   onOpenAuth,
   onLogout,
+  onOpenSupabase,
 }) => {
+  const isSupabaseConfigured = getSupabaseConfig().isConfigured;
+
   return (
     <header className="sticky top-0 z-30 w-full bg-[#080c14]/90 backdrop-blur-md border-b border-slate-800/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -113,7 +118,26 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         {/* Zone 3: Primary Actions */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Supabase Status / Settings Button */}
+          <button
+            onClick={onOpenSupabase}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+              isSupabaseConfigured
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-emerald-500/40'
+            }`}
+            title="إعدادات واتصال قاعدة بيانات Supabase"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Supabase</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isSupabaseConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+              }`}
+            />
+          </button>
+
           {currentUser ? (
             <div className="flex items-center gap-2 sm:gap-3">
               {/* Quick balance pill */}
