@@ -37,7 +37,6 @@ export const ReferralsView: React.FC<ReferralsViewProps> = ({
 }) => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [simulating, setSimulating] = useState(false);
 
   const referrals = db.getReferrals(user.id);
   const totalCount = referrals.length;
@@ -89,16 +88,6 @@ export const ReferralsView: React.FC<ReferralsViewProps> = ({
     } else {
       handleCopyLink();
     }
-  };
-
-  // Simulate an invitee registering and investing (demo tester)
-  const handleSimulateReferral = (invested: boolean) => {
-    setSimulating(true);
-    setTimeout(() => {
-      db.simulateAddReferral(user.id, invested);
-      onRefreshData();
-      setSimulating(false);
-    }, 400);
   };
 
   return (
@@ -306,31 +295,6 @@ export const ReferralsView: React.FC<ReferralsViewProps> = ({
 
             <div className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
               💡 <span className="text-slate-200 font-medium">ملاحظة تنظيمية:</span> لا تحتسب الإحالة كمؤهلة إلا بعد تحقق حالة الاستثمار الخاصة بالمستخدم المُحال إليه.
-            </div>
-          </div>
-
-          {/* Testing Simulator Helper */}
-          <div className="mt-5 pt-4 border-t border-slate-800">
-            <span className="block text-[11px] font-semibold text-amber-300 mb-2">
-              أدوات التجربة السريعة (للمعاينة):
-            </span>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                disabled={simulating}
-                onClick={() => handleSimulateReferral(true)}
-                className="flex-1 py-2 px-3 text-xs font-semibold rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>محاكاة إحالة مؤهلة (استثمرت)</span>
-              </button>
-              <button
-                disabled={simulating}
-                onClick={() => handleSimulateReferral(false)}
-                className="py-2 px-3 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer flex items-center justify-center gap-1"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>مسجل فقط</span>
-              </button>
             </div>
           </div>
         </div>

@@ -18,6 +18,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   // Form fields
   const [firstName, setFirstName] = useState('');
@@ -32,6 +34,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   useEffect(() => {
     setMode(initialMode);
     setError(null);
+    setInfoMessage(null);
 
     // Check URL parameters for ref code (?ref=ABC123)
     const urlParams = new URLSearchParams(window.location.search);
@@ -47,61 +50,74 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setInfoMessage(null);
+    setLoading(true);
 
-    if (mode === 'login') {
-      if (!email || !password) {
-        setError('يرجى ملء جميع الحقول المطلوبة');
-        return;
-      }
-      const res = db.loginUser(email, password);
-      if (!res.success) {
-        setError(res.error || 'فشل تسجيل الدخول');
-        return;
-      }
-      onSuccess();
-      onClose();
-    } else {
-      // Registration
-      if (!firstName.trim() || !lastName.trim() || !phone.trim() || !email.trim() || !password) {
-        setError('يرجى ملء جميع الحقول الإلزامية');
-        return;
-      }
-      if (password !== confirmPassword) {
-        setError('كلمة المرور وتأكيد كلمة المرور غير متطابقين');
-        return;
-      }
-      if (password.length < 6) {
-        setError('كلمة المرور يجب أن لا تقل عن 6 أحرف أو أرقام');
-        return;
-      }
+    try {
+      if (mode === 'login') {
+        if (!email || !password) {
+          setError('يرجى ملء جميع الحقول المطلوبة');
+          setLoading(false);
+          return;
+        }
+        const res = await db.loginUser(email, password);
+        if (!res.success) {
+          setError(res.error || 'فشل تسجيل الدخول');
+          setLoading(false);
+          return;
+        }
+        onSuccess();
+        onClose();
+      } else {
+        // Registration
+        if (!firstName.trim() || !lastName.trim() || !phone.trim() || !email.trim() || !password) {
+          setError('يرجى ملء جميع الحقول الإلزامية');
+          setLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError('كلمة المرور وتأكيد كلمة المرور غير متطابقين');
+          setLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError('كلمة المرور يجب أن لا تقل عن 6 أحرف أو أرقام');
+          setLoading(false);
+          return;
+        }
 
-      const res = db.registerUser({
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-        email,
-        password,
-        referred_by_code: referralCode.trim() || undefined,
-      });
+        const res = await db.registerUser({
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          email,
+          password,
+          referred_by_code: referralCode.trim() || undefined,
+        });
 
-      if (!res.success) {
-        setError(res.error || 'حدث خطأ أثناء التسجيل');
-        return;
+        if (!res.success) {
+          setError(res.error || 'حدث خطأ أثناء التسجيل');
+          setLoading(false);
+          return;
+        }
+
+        if (res.requiresEmailConfirmation) {
+          setInfoMessage(res.message || 'تم إرسال رابط تأكيد إلى بريدك الإلكتروني.');
+          setMode('login');
+          setLoading(false);
+          return;
+        }
+
+        onSuccess();
+        onClose();
       }
-
-      onSuccess();
-      onClose();
-    }
-  };
-
-  const handleQuickDemoLogin = () => {
-    const res = db.loginUser('demo@invest.com', 'password123');
-    if (res.success) {
-      onSuccess();
-      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'حدث خطأ غير متوقع');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -164,6 +180,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             حساب جديد
           </button>
         </div>
+
+        {/* Info message */}
+        {infoMessage && (
+          <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{infoMessage}</span>
+          </div>
+        )}
 
         {/* Error message */}
         {error && (
@@ -321,25 +345,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* Submit button */}
           <button
             type="submit"
-            className="w-full mt-2 py-3 px-4 rounded-xl font-bold text-sm text-slate-950 bg-gradient-to-l from-amber-400 via-emerald-400 to-emerald-300 hover:from-amber-300 hover:to-emerald-200 transition-all shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+            disabled={loading}
+            className="w-full mt-2 py-3 px-4 rounded-xl font-bold text-sm text-slate-950 bg-gradient-to-l from-amber-400 via-emerald-400 to-emerald-300 hover:from-amber-300 hover:to-emerald-200 transition-all shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <span>{mode === 'login' ? 'دخول إلى حسابي' : 'إتمام التسجيل وبدء الاستثمار'}</span>
+            {loading ? (
+              <span className="inline-block w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+            ) : null}
+            <span>
+              {loading
+                ? 'جاري التحقق...'
+                : mode === 'login'
+                ? 'دخول إلى حسابي'
+                : 'إتمام التسجيل وبدء الاستثمار'}
+            </span>
           </button>
         </form>
-
-        {/* Quick Demo Login Option */}
-        <div className="mt-5 pt-4 border-t border-slate-800/80 text-center">
-          <p className="text-[11px] text-slate-400 mb-2">
-            تريد المعاينة السريعة بالحساب التجريبي الجاهز؟
-          </p>
-          <button
-            type="button"
-            onClick={handleQuickDemoLogin}
-            className="w-full py-2 px-3 text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-xl transition-colors cursor-pointer"
-          >
-            دخول مباشر بحساب المستثمر التجريبي (أحمد المنصوري)
-          </button>
-        </div>
       </div>
     </div>
   );

@@ -47,12 +47,12 @@ export const WalletView: React.FC<WalletViewProps> = ({ user, profile, onRefresh
     setTimeout(() => setCopiedAddress(false), 2000);
   };
 
-  const handleExecuteDeposit = () => {
+  const handleExecuteDeposit = async () => {
     if (!selectedWallet) return;
     const amt = parseFloat(depositAmount);
     if (isNaN(amt) || amt <= 0) return;
 
-    db.depositToWallet(user.id, selectedWallet.currency, amt);
+    await db.depositToWallet(user.id, selectedWallet.currency, amt);
     setDepositSuccess(true);
     onRefreshData();
     setTimeout(() => {
@@ -61,7 +61,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ user, profile, onRefresh
     }, 1800);
   };
 
-  const handleExecuteWithdrawal = () => {
+  const handleExecuteWithdrawal = async () => {
     setWithdrawError(null);
     if (!selectedWallet) return;
     const amt = parseFloat(withdrawAmount);
@@ -74,7 +74,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ user, profile, onRefresh
       return;
     }
 
-    const res = db.withdrawFromWallet(user.id, selectedWallet.currency, amt, withdrawAddress.trim());
+    const res = await db.withdrawFromWallet(user.id, selectedWallet.currency, amt, withdrawAddress.trim());
     if (!res.success) {
       setWithdrawError(res.error || 'فشل تنفيذ عملية السحب');
       return;

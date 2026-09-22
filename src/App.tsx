@@ -12,10 +12,8 @@ import { OperationsView } from './views/OperationsView';
 import { ProfileView } from './views/ProfileView';
 import { AuthModal } from './views/AuthModal';
 import { InvestmentModal } from './views/InvestmentModal';
-import { AdminPreviewModal } from './views/AdminPreviewModal';
-import { SupabaseModal } from './views/SupabaseModal';
+import { AdminSecureView } from './views/AdminSecureView';
 import { Logo } from './components/common/Logo';
-import { ShieldCheck, Database } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -23,15 +21,23 @@ export default function App() {
   const [levels, setLevels] = useState<InvestmentLevel[]>([]);
   const [currentTab, setCurrentTab] = useState<string>('home');
 
+  // Hidden admin routing
+  const [route, setRoute] = useState<string>(() => {
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (path.includes('secure-admin') || hash.includes('secure-admin')) {
+      return 'secure-admin';
+    }
+    return 'main';
+  });
+
   // Modals state
   const [authOpen, setAuthOpen] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [investmentModalOpen, setInvestmentModalOpen] = useState<boolean>(false);
   const [selectedLevel, setSelectedLevel] = useState<InvestmentLevel | null>(null);
-  const [adminModalOpen, setAdminModalOpen] = useState<boolean>(false);
-  const [supabaseModalOpen, setSupabaseModalOpen] = useState<boolean>(false);
 
-  // Sync state from storage
+  // Sync state from database
   const refreshData = useCallback(() => {
     const user = db.getCurrentUser();
     setCurrentUser(user);
@@ -47,6 +53,25 @@ export default function App() {
   useEffect(() => {
     refreshData();
 
+    // Subscribe to database changes
+    const unsubscribe = db.subscribe(() => {
+      refreshData();
+    });
+
+    // Listen to hash / URL changes for hidden admin route
+    const handleUrlChange = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path.includes('secure-admin') || hash.includes('secure-admin')) {
+        setRoute('secure-admin');
+      } else {
+        setRoute('main');
+      }
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+
     // Check if URL has ?ref=... parameter
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
@@ -55,15 +80,34 @@ export default function App() {
       setAuthMode('register');
       setAuthOpen(true);
     }
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
   }, [refreshData]);
+
+  // If in hidden admin route, display secure admin view
+  if (route === 'secure-admin') {
+    return (
+      <AdminSecureView
+        onExit={() => {
+          window.history.pushState({}, '', '/');
+          setRoute('main');
+          setCurrentTab('home');
+        }}
+      />
+    );
+  }
 
   const handleOpenAuth = (mode: 'login' | 'register') => {
     setAuthMode(mode);
     setAuthOpen(true);
   };
 
-  const handleLogout = () => {
-    db.logout();
+  const handleLogout = async () => {
+    await db.logout();
     refreshData();
     setCurrentTab('landing');
   };
@@ -87,7 +131,8 @@ export default function App() {
     if (!profile) {
       return (
         <div className="py-20 text-center text-slate-400">
-          جاري تحميل بيانات الحساب...
+          <div className="w-8 h-8 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <span>جاري مزامنة بيانات الحساب...</span>
         </div>
       );
     }
@@ -171,7 +216,6 @@ export default function App() {
         onNavigate={setCurrentTab}
         onOpenAuth={handleOpenAuth}
         onLogout={handleLogout}
-        onOpenSupabase={() => setSupabaseModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -188,7 +232,7 @@ export default function App() {
         />
       )}
 
-      {/* Footer */}
+      {/* Clean Footer */}
       <footer className="w-full border-t border-slate-800/80 bg-[#060910] py-6 px-4 text-center text-xs text-slate-400 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -201,25 +245,13 @@ export default function App() {
           <div className="flex items-center gap-4 text-[11px]">
             <span className="text-slate-400">INVEST • GROW • PROFIT</span>
             <span className="text-slate-700">|</span>
-            {/* Supabase Connection Button */}
-            <button
-              onClick={() => setSupabaseModalOpen(true)}
-              className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors cursor-pointer font-medium"
-              title="إعدادات واتصال قاعدة بيانات Supabase"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>ربط Supabase</span>
-            </button>
+            <span className="text-slate-400 hover:text-white transition-colors cursor-pointer">
+              الشروط والأحكام
+            </span>
             <span className="text-slate-700">|</span>
-            {/* Discreet Admin Architecture Inspector Button */}
-            <button
-              onClick={() => setAdminModalOpen(true)}
-              className="text-slate-400 hover:text-amber-400 flex items-center gap-1 transition-colors cursor-pointer"
-              title="معاينة بنية لوحة الإدارة وقواعد البيانات لـ Supabase"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>هيكل الإدارة (Admin DB)</span>
-            </button>
+            <span className="text-slate-400 hover:text-white transition-colors cursor-pointer">
+              سياسة الخصوصية
+            </span>
           </div>
         </div>
       </footer>
@@ -249,20 +281,6 @@ export default function App() {
           }}
         />
       )}
-
-      {/* Admin Architecture Preview Modal */}
-      <AdminPreviewModal
-        isOpen={adminModalOpen}
-        onClose={() => setAdminModalOpen(false)}
-        onRefreshData={refreshData}
-      />
-
-      {/* Supabase Connection & Schema Modal */}
-      <SupabaseModal
-        isOpen={supabaseModalOpen}
-        onClose={() => setSupabaseModalOpen(false)}
-        onConnected={refreshData}
-      />
     </div>
   );
 }

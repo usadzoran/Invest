@@ -38,12 +38,13 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
 
       if (difference <= 0) {
         // Cycle reached 00:00:00! Process cycle return
-        const result = db.processCycleCompletion(userId);
-        setCycleCompletedBanner(result.returnedAmount);
-        if (onCycleCompleted) {
-          onCycleCompleted(result.returnedAmount);
-        }
-        setTimeout(() => setCycleCompletedBanner(null), 6000);
+        db.processCycleCompletion(userId).then((result) => {
+          setCycleCompletedBanner(result.returnedAmount);
+          if (onCycleCompleted) {
+            onCycleCompleted(result.returnedAmount);
+          }
+          setTimeout(() => setCycleCompletedBanner(null), 6000);
+        });
         return;
       }
 
@@ -71,8 +72,8 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   }, [userId, onCycleCompleted]);
 
   // Handler for quick test simulation: instantly completes cycle
-  const handleFastForward = () => {
-    const result = db.processCycleCompletion(userId);
+  const handleFastForward = async () => {
+    const result = await db.processCycleCompletion(userId);
     setCycleCompletedBanner(result.returnedAmount);
     if (onCycleCompleted) {
       onCycleCompleted(result.returnedAmount);

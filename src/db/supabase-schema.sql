@@ -142,6 +142,11 @@ values
 on conflict do nothing;
 
 -- =========================================================================
+-- OPTIONAL ROLE COLUMN FOR PROFILES
+-- =========================================================================
+alter table public.profiles add column if not exists role text default 'user';
+
+-- =========================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- =========================================================================
 alter table public.profiles enable row level security;
@@ -153,36 +158,117 @@ alter table public.referrals enable row level security;
 alter table public.wallets enable row level security;
 alter table public.transactions enable row level security;
 
+-- Admin check helper function
+create or replace function public.is_admin()
+returns boolean as $$
+begin
+  return exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin'
+  );
+end;
+$$ language plpgsql security definer;
+
 -- Public read for levels and plans
+drop policy if exists "Public can view investment levels" on public.investment_levels;
 create policy "Public can view investment levels" on public.investment_levels for select using (true);
+
+drop policy if exists "Admins can update investment levels" on public.investment_levels;
+create policy "Admins can update investment levels" on public.investment_levels for update using (is_admin());
+
+drop policy if exists "Public can view investment plans" on public.investment_plans;
 create policy "Public can view investment plans" on public.investment_plans for select using (true);
 
--- User policies
-create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id);
-create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
+-- User and Admin policies for Profiles
+drop policy if exists "Users can view own profile" on public.profiles;
+create policy "Users can view own profile" on public.profiles for select using (auth.uid() = id or is_admin());
+
+drop policy if exists "Users can update own profile" on public.profiles;
+create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id or is_admin());
+
+drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile" on public.profiles for insert with check (auth.uid() = id);
 
-create policy "Users can view own investments" on public.investments for select using (auth.uid() = user_id);
+-- Investments
+drop policy if exists "Users can view own investments" on public.investments;
+create policy "Users can view own investments" on public.investments for select using (auth.uid() = user_id or is_admin());
+
+drop policy if exists "Users can insert own investments" on public.investments;
 create policy "Users can insert own investments" on public.investments for insert with check (auth.uid() = user_id);
 
-create policy "Users can view own cycle" on public.daily_cycles for select using (auth.uid() = user_id);
+drop policy if exists "Admins can update investments" on public.investments;
+create policy "Admins can update investments" on public.investments for update using (is_admin());
+
+-- Daily Cycles
+drop policy if exists "Users can view own cycle" on public.daily_cycles;
+create policy "Users can view own cycle" on public.daily_cycles for select using (auth.uid() = user_id or is_admin());
+
+drop policy if exists "Users can update own cycle" on public.daily_cycles;
 create policy "Users can update own cycle" on public.daily_cycles for update using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own cycle" on public.daily_cycles;
 create policy "Users can insert own cycle" on public.daily_cycles for insert with check (auth.uid() = user_id);
 
-create policy "Users can view own referrals" on public.referrals for select using (auth.uid() = referrer_id);
+-- Referrals
+drop policy if exists "Users can view own referrals" on public.referrals;
+create policy "Users can view own referrals" on public.referrals for select using (auth.uid() = referrer_id or is_admin());
+
+drop policy if exists "Users can insert own referrals" on public.referrals;
 create policy "Users can insert own referrals" on public.referrals for insert with check (auth.uid() = referrer_id);
 
-create policy "Users can view own wallets" on public.wallets for select using (auth.uid() = user_id);
-create policy "Users can update own wallets" on public.wallets for update using (auth.uid() = user_id);
+-- Wallets
+drop policy if exists "Users can view own wallets" on public.wallets;
+create policy "Users can view own wallets" on public.wallets for select using (auth.uid() = user_id or is_admin());
+
+drop policy if exists "Users can update own wallets" on public.wallets;
+create policy "Users can update own wallets" on public.wallets for update using (auth.uid() = user_id or is_admin());
+
+drop policy if exists "Users can insert own wallets" on public.wallets;
 create policy "Users can insert own wallets" on public.wallets for insert with check (auth.uid() = user_id);
 
-create policy "Users can view own transactions" on public.transactions for select using (auth.uid() = user_id);
+-- Transactions
+drop policy if exists "Users can view own transactions" on public.transactions;
+create policy "Users can view own transactions" on public.transactions for select using (auth.uid() = user_id or is_admin());
+
+drop policy if exists "Users can insert own transactions" on public.transactions;
 create policy "Users can insert own transactions" on public.transactions for insert with check (auth.uid() = user_id);
 
+drop policy if exists "Admins can update transactions" on public.transactions;
+create policy "Admins can update transactions" on public.transactions for update using (is_admin());
+
 -- Realtime enablement
-alter publication supabase_realtime add table public.profiles;
-alter publication supabase_realtime add table public.investments;
-alter publication supabase_realtime add table public.daily_cycles;
-alter publication supabase_realtime add table public.referrals;
-alter publication supabase_realtime add table public.wallets;
-alter publication supabase_realtime add table public.transactions;
+do $$
+begin
+  alter publication supabase_realtime add table public.profiles;
+exception when others then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.investments;
+exception when others then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.daily_cycles;
+exception when others then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.referrals;
+exception when others then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.wallets;
+exception when others then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.transactions;
+exception when others then null;
+end $$;

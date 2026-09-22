@@ -54,14 +54,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const handleResetDemo = () => {
-    if (window.confirm('هل تريد إعادة تعيين كافة البيانات التجريبية إلى الوضع الافتراضي؟')) {
-      db.resetAll();
-      onRefreshData();
-      window.location.reload();
-    }
-  };
-
   return (
     <div className="space-y-6 text-right max-w-5xl mx-auto pb-10">
       {/* Profile Header Card */}
@@ -220,23 +212,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Demo Reset Helper Button */}
-      <div className="p-4 rounded-2xl bg-slate-900/30 border border-slate-800 flex items-center justify-between">
-        <div>
-          <span className="text-xs font-bold text-slate-300 block">إعادة ضبط البيانات التجريبية</span>
-          <span className="text-[11px] text-slate-500">
-            يعيد تهيئة الأرصدة والمستويات والحسابات لوضع البداية النظيف.
-          </span>
-        </div>
-        <button
-          onClick={handleResetDemo}
-          className="py-1.5 px-3 rounded-xl text-xs font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors flex items-center gap-1.5 cursor-pointer"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>إعادة ضبط</span>
-        </button>
       </div>
     </div>
   );

@@ -27,6 +27,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
   const [customAmount, setCustomAmount] = useState<string>('');
   const [stage, setStage] = useState<'select' | 'confirm'>('select');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
@@ -78,23 +79,31 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
     setStage('confirm');
   };
 
-  const handleConfirmInvestment = () => {
+  const handleConfirmInvestment = async () => {
     setError(null);
-    const res = db.createInvestment({
-      userId,
-      levelId: level.level_number,
-      amount: currentAmount,
-      expectedDailyReturn,
-      planId: selectedPlan?.id,
-    });
+    setLoading(true);
+    try {
+      const res = await db.createInvestment({
+        userId,
+        levelId: level.level_number,
+        amount: currentAmount,
+        expectedDailyReturn,
+        planId: selectedPlan?.id,
+      });
 
-    if (!res.success) {
-      setError(res.error || 'فشل تنفيذ الاستثمار');
-      return;
+      if (!res.success) {
+        setError(res.error || 'فشل تنفيذ الاستثمار');
+        setLoading(false);
+        return;
+      }
+
+      onSuccess();
+      onClose();
+    } catch (e: any) {
+      setError(e?.message || 'حدث خطأ أثناء تنفيذ الاستثمار');
+    } finally {
+      setLoading(false);
     }
-
-    onSuccess();
-    onClose();
   };
 
   const now = new Date();
@@ -310,11 +319,16 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
 
               <button
                 type="button"
+                disabled={loading}
                 onClick={handleConfirmInvestment}
-                className="flex-[2] py-3 px-4 rounded-xl font-bold text-sm text-slate-950 bg-gradient-to-l from-amber-400 via-emerald-400 to-emerald-300 hover:from-amber-300 hover:to-emerald-200 transition-all shadow-lg shadow-emerald-500/25 active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                className="flex-[2] py-3 px-4 rounded-xl font-bold text-sm text-slate-950 bg-gradient-to-l from-amber-400 via-emerald-400 to-emerald-300 hover:from-amber-300 hover:to-emerald-200 transition-all shadow-lg shadow-emerald-500/25 active:scale-98 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>تأكيد الاستثمار</span>
+                {loading ? (
+                  <span className="inline-block w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                <span>{loading ? 'جاري التأكيد...' : 'تأكيد الاستثمار'}</span>
               </button>
             </div>
           </div>
