@@ -1,0 +1,6 @@
+{
+  "name": "استثمر واربح",
+  "description": "منصة الاستثمار الرائدة - INVEST • GROW • PROFIT - تابع استثماراتك وعوائدك اليومية ومستويات النمو ونظام الإحالة المتطور.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
