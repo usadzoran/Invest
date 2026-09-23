@@ -36,7 +36,8 @@ export class ErrorBoundary extends Component<Props, State> {
     } catch {
       localStorage.clear();
     }
-    window.location.href = '/';
+    const basePath = window.location.pathname.toLowerCase().includes('/invest') ? '/Invest/' : '/';
+    window.location.href = basePath;
   };
 
   public render() {
