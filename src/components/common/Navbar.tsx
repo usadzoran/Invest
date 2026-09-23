@@ -1,8 +1,7 @@
 import React from 'react';
 import { Logo } from './Logo';
 import { User, Profile } from '../../types/database';
-import { Wallet, User as UserIcon, LogOut, ArrowRightLeft, ShieldCheck, Database } from 'lucide-react';
-import { getSupabaseConfig } from '../../services/supabase';
+import { Wallet, LogOut } from 'lucide-react';
 
 interface NavbarProps {
   currentUser: User | null;

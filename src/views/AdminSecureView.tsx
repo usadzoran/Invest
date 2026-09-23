@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../services/storage';
-import { getSupabase } from '../services/supabase';
+import { db, supabase, getSupabase } from '../services/storage';
 import { Logo } from '../components/common/Logo';
 import {
   ShieldCheck,

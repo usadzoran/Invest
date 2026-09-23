@@ -139,14 +139,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <div className="flex items-center justify-between text-xs py-2 border-b border-slate-800/80">
             <span className="text-slate-400">مبلغ الاستثمار الحالي:</span>
             <span className="font-mono font-bold text-white tabular-nums">
-              ${profile.current_invested.toFixed(2)}
+              ${(Number(profile?.current_invested) || 0).toFixed(2)}
             </span>
           </div>
 
           <div className="flex items-center justify-between text-xs py-2 border-b border-slate-800/80">
             <span className="text-slate-400">إجمالي العوائد والأرباح:</span>
             <span className="font-mono font-bold text-emerald-400 tabular-nums">
-              +${profile.total_profits.toFixed(2)}
+              +${(Number(profile?.total_profits) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -207,7 +207,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </span>
               </div>
               <div className="text-left font-mono font-bold text-emerald-400 tabular-nums">
-                {tx.amount > 0 ? `$${tx.amount.toFixed(2)}` : '—'}
+                {Number(tx.amount) > 0 ? `$${(Number(tx.amount) || 0).toFixed(2)}` : '—'}
               </div>
             </div>
           ))}

@@ -29,7 +29,9 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  if (!isOpen) return null;
+  if (!isOpen || !level) return null;
+
+  const validUserBalance = Number(userBalance) || 0;
 
   // Calculate return rate for custom amount
   // Level 1: 20% daily return
@@ -71,8 +73,8 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
       }
     }
 
-    if (currentAmount > userBalance) {
-      setError(`رصيدك المتاح ($${userBalance.toFixed(2)}) لا يكفي لتغطية هذا المبلغ ($${currentAmount})`);
+    if (currentAmount > validUserBalance) {
+      setError(`رصيدك المتاح ($${validUserBalance.toFixed(2)}) لا يكفي لتغطية هذا المبلغ ($${currentAmount})`);
       return;
     }
 
@@ -144,7 +146,7 @@ export const InvestmentModal: React.FC<InvestmentModalProps> = ({
               <p className="text-xs text-slate-400 mt-1">
                 رصيدك المتاح حالياً:{' '}
                 <span className="font-mono text-emerald-400 font-bold tabular-nums">
-                  ${userBalance.toFixed(2)}
+                  ${validUserBalance.toFixed(2)}
                 </span>
               </p>
             </div>

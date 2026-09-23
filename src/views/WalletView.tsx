@@ -111,7 +111,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ user, profile, onRefresh
           <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-emerald-500/30 text-left sm:text-right">
             <span className="text-[11px] text-slate-400">إجمالي القيمة المقدرة:</span>
             <div className="text-2xl font-black text-emerald-400 font-mono tabular-nums">
-              ${profile.total_balance.toFixed(2)}
+              ${(Number(profile?.total_balance) || 0).toFixed(2)}
             </div>
           </div>
         </div>
@@ -120,7 +120,9 @@ export const WalletView: React.FC<WalletViewProps> = ({ user, profile, onRefresh
       {/* Wallets Cards List */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {wallets.map((w) => {
-          const usdValue = w.balance * w.usd_rate;
+          const bal = Number(w.balance) || 0;
+          const rate = Number(w.usd_rate) || 1;
+          const usdValue = bal * rate;
           return (
             <div
               key={w.id}
@@ -138,7 +140,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ user, profile, onRefresh
                     </div>
                   </div>
                   <span className="text-[10px] font-mono text-slate-400">
-                    1 {w.currency} = ${w.usd_rate.toLocaleString()}
+                    1 {w.currency} = ${rate.toLocaleString()}
                   </span>
                 </div>
 
@@ -146,7 +148,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ user, profile, onRefresh
                 <div className="mt-4 p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80">
                   <span className="text-[11px] text-slate-400">الرصيد المتاح:</span>
                   <div className="text-xl font-black text-white font-mono tabular-nums mt-0.5">
-                    {w.balance.toLocaleString(undefined, { maximumFractionDigits: 6 })}{' '}
+                    {bal.toLocaleString(undefined, { maximumFractionDigits: 6 })}{' '}
                     <span className="text-xs text-slate-400">{w.currency}</span>
                   </div>
                   <div className="text-xs text-emerald-400 font-mono font-medium mt-1 tabular-nums">
@@ -295,7 +297,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ user, profile, onRefresh
               سحب {selectedWallet.currency} إلى محفظتك الخارجية
             </h3>
             <p className="text-xs text-slate-400 mb-4">
-              الرصيد المتاح: {selectedWallet.balance} {selectedWallet.currency} (≈ ${(selectedWallet.balance * selectedWallet.usd_rate).toFixed(2)})
+              الرصيد المتاح: {selectedWallet.balance} {selectedWallet.currency} (≈ ${( (Number(selectedWallet.balance) || 0) * (Number(selectedWallet.usd_rate) || 1) ).toFixed(2)})
             </p>
 
             {withdrawSuccess ? (

@@ -16,9 +16,12 @@ import { AdminSecureView } from './views/AdminSecureView';
 import { Logo } from './components/common/Logo';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [levels, setLevels] = useState<InvestmentLevel[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => db.getCurrentUser());
+  const [profile, setProfile] = useState<Profile | null>(() => {
+    const u = db.getCurrentUser();
+    return u ? db.getUserProfile(u.id) : null;
+  });
+  const [levels, setLevels] = useState<InvestmentLevel[]>(() => db.getLevels());
   const [currentTab, setCurrentTab] = useState<string>('home');
 
   // Hidden admin routing

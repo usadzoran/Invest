@@ -91,7 +91,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-extrabold text-white font-mono tabular-nums">
-              ${profile.total_balance.toFixed(2)}
+              ${(Number(profile?.total_balance) || 0).toFixed(2)}
             </div>
             <span className="text-[10px] text-emerald-400 font-medium mt-1 inline-block">
               متاح للسحب والاستثمار
@@ -109,7 +109,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-extrabold text-amber-300 font-mono tabular-nums">
-              ${profile.current_invested.toFixed(2)}
+              ${(Number(profile?.current_invested) || 0).toFixed(2)}
             </div>
             <span className="text-[10px] text-slate-400 mt-1 inline-block">
               {activeInvestments.length} خطط قيد التشغيل
@@ -127,7 +127,7 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
           </div>
           <div>
             <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 font-mono tabular-nums">
-              +${profile.total_profits.toFixed(2)}
+              +${(Number(profile?.total_profits) || 0).toFixed(2)}
             </div>
             <span className="text-[10px] text-emerald-400/80 mt-1 inline-block">
               عائدات يومية ومكافآت
@@ -274,10 +274,10 @@ export const HomeDashboardView: React.FC<HomeDashboardViewProps> = ({
                     <span className="text-[10px] text-slate-400">نشط</span>
                   </div>
                   <div className="text-xl font-bold text-white font-mono tabular-nums">
-                    ${inv.amount.toFixed(2)}
+                    ${(Number(inv.amount) || 0).toFixed(2)}
                   </div>
                   <div className="text-xs text-emerald-400 font-medium mt-1">
-                    عائد يومي: +${inv.expected_daily_return.toFixed(2)}
+                    عائد يومي: +${(Number(inv.expected_daily_return) || 0).toFixed(2)}
                   </div>
                 </div>
 

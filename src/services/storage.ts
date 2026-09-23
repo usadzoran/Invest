@@ -9,9 +9,108 @@ import {
   CryptoWallet,
   Transaction,
 } from '../types/database';
-import { getSupabase } from './supabase';
+import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+
+// Retrieve Supabase credentials from Vite import.meta.env, process.env, or localStorage
+const getEnvVar = (key: string): string => {
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.[key]) {
+      return (import.meta as any).env[key];
+    }
+  } catch {}
+  try {
+    if (typeof process !== 'undefined' && process.env?.[key]) {
+      return process.env[key] || '';
+    }
+  } catch {}
+  return '';
+};
+
+const envUrl = getEnvVar('VITE_SUPABASE_URL');
+const envKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
+
+const localUrl = typeof window !== 'undefined' ? localStorage.getItem('invest_app_supabase_url') || '' : '';
+const localKey = typeof window !== 'undefined' ? localStorage.getItem('invest_app_supabase_key') || '' : '';
+
+export const SUPABASE_URL: string =
+  (envUrl && envUrl !== 'https://your-project.supabase.co' ? envUrl.trim() : '') || localUrl.trim();
+
+export const SUPABASE_ANON_KEY: string =
+  (envKey && envKey !== 'your-anon-public-key' ? envKey.trim() : '') || localKey.trim();
+
+// Export the initialized Supabase client instance
+export const supabase: SupabaseClient | null =
+  SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_URL.startsWith('https://')
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+        },
+      })
+    : null;
+
+// Helper to retrieve the current client instance
+export const getSupabase = (): SupabaseClient | null => supabase;
 
 export const CYCLE_DURATION_MS = 24 * 60 * 60 * 1000;
+
+// Initial fallback levels (matches supabase-schema.sql)
+const DEFAULT_LEVELS: InvestmentLevel[] = [
+  {
+    id: '1',
+    level_number: 1,
+    name: 'المستوى الأول (Level 1)',
+    description: 'مستوى البداية لجميع المستثمرين الجدد. باقات استثمار يومية سريعة تبدأ من 5$ وتصل إلى 50$.',
+    required_referrals: 0,
+    min_investment: 5.0,
+    max_investment: 50.0,
+    is_unlocked: true,
+    badge_color: 'emerald',
+  },
+  {
+    id: '2',
+    level_number: 2,
+    name: 'المستوى الثاني (Level 2)',
+    description: 'المستوى المتقدم بعوائد مضاعفة. يتطلب إحالتين مؤهلتين قامتا بالاستثمار بأنفسهما لفتحه.',
+    required_referrals: 2,
+    min_investment: 100.0,
+    max_investment: 500.0,
+    is_unlocked: false,
+    badge_color: 'amber',
+  },
+  {
+    id: '3',
+    level_number: 3,
+    name: 'المستوى الثالث (Level 3)',
+    description: 'مستوى كبار المستثمرين بعوائد تفضيلية حصرية.',
+    required_referrals: 5,
+    min_investment: 1000.0,
+    max_investment: 5000.0,
+    is_unlocked: false,
+    badge_color: 'blue',
+  },
+  {
+    id: '4',
+    level_number: 4,
+    name: 'المستوى الرابع (Level 4)',
+    description: 'مستوى الشركاء النخبة بعقود استثمارية واستراتيجية مخصصة.',
+    required_referrals: 10,
+    min_investment: 10000.0,
+    max_investment: 50000.0,
+    is_unlocked: false,
+    badge_color: 'purple',
+  },
+];
+
+const DEFAULT_PLANS: InvestmentPlan[] = [
+  { id: '1', level_id: 1, amount: 5.0, daily_return: 1.0, return_percentage: 20.0, duration_days: 1, is_custom: false },
+  { id: '2', level_id: 1, amount: 10.0, daily_return: 2.0, return_percentage: 20.0, duration_days: 1, is_custom: false },
+  { id: '3', level_id: 1, amount: 25.0, daily_return: 5.0, return_percentage: 20.0, duration_days: 1, is_custom: false },
+  { id: '4', level_id: 1, amount: 50.0, daily_return: 10.0, return_percentage: 20.0, duration_days: 1, is_custom: false },
+  { id: '5', level_id: 2, amount: 100.0, daily_return: 25.0, return_percentage: 25.0, duration_days: 1, is_custom: false },
+  { id: '6', level_id: 2, amount: 250.0, daily_return: 65.0, return_percentage: 26.0, duration_days: 1, is_custom: false },
+  { id: '7', level_id: 2, amount: 500.0, daily_return: 140.0, return_percentage: 28.0, duration_days: 1, is_custom: false },
+];
 
 class DatabaseService {
   private currentUser: User | null = null;
@@ -21,10 +120,11 @@ class DatabaseService {
   private userTransactions: Transaction[] = [];
   private userReferrals: Referral[] = [];
   private userCycle: DailyCycle | null = null;
-  private levels: InvestmentLevel[] = [];
-  private plans: InvestmentPlan[] = [];
+  private levels: InvestmentLevel[] = DEFAULT_LEVELS;
+  private plans: InvestmentPlan[] = DEFAULT_PLANS;
   private listeners: (() => void)[] = [];
   private isInitialized = false;
+  private realtimeChannel: RealtimeChannel | null = null;
 
   constructor() {
     this.init();
@@ -43,24 +143,24 @@ class DatabaseService {
       try {
         l();
       } catch (err) {
-        console.error('Listener notify error:', err);
+        console.error('DatabaseService listener notify error:', err);
       }
     });
   }
 
-  // --- Initialization with Supabase ---
+  // --- Initialization directly with Supabase ---
   async init() {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
     const supabase = getSupabase();
     if (!supabase) {
-      console.warn('Supabase client is not available yet.');
+      console.warn('Supabase client is not ready.');
       return;
     }
 
     try {
-      // 1. Fetch public investment levels
+      // 1. Fetch public investment levels and plans from Supabase
       await this.fetchLevelsAndPlans();
 
       // 2. Check active auth session
@@ -72,27 +172,39 @@ class DatabaseService {
         await this.handleUserSession(session.user);
       }
 
-      // 3. Listen to auth state changes
+      // 3. Listen to auth state changes in Supabase Auth
       supabase.auth.onAuthStateChange(async (event, newSession) => {
         if (newSession?.user) {
           await this.handleUserSession(newSession.user);
         } else {
-          this.currentUser = null;
-          this.currentProfile = null;
-          this.userWallets = [];
-          this.userInvestments = [];
-          this.userTransactions = [];
-          this.userReferrals = [];
-          this.userCycle = null;
+          this.cleanupSession();
           this.notify();
         }
       });
     } catch (err) {
-      console.error('Error during Supabase init:', err);
+      console.error('Error during Supabase initialization:', err);
     }
   }
 
-  // --- Load public investment levels and plans from Supabase ---
+  // --- Cleanup session on logout ---
+  private cleanupSession() {
+    if (this.realtimeChannel) {
+      const supabase = getSupabase();
+      if (supabase) {
+        supabase.removeChannel(this.realtimeChannel);
+      }
+      this.realtimeChannel = null;
+    }
+    this.currentUser = null;
+    this.currentProfile = null;
+    this.userWallets = [];
+    this.userInvestments = [];
+    this.userTransactions = [];
+    this.userReferrals = [];
+    this.userCycle = null;
+  }
+
+  // --- Load public investment levels and plans directly from Supabase ---
   async fetchLevelsAndPlans() {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -143,7 +255,7 @@ class DatabaseService {
 
       this.notify();
     } catch (e) {
-      console.error('Failed to fetch levels/plans:', e);
+      console.error('Failed to fetch levels/plans from Supabase:', e);
     }
   }
 
@@ -155,7 +267,7 @@ class DatabaseService {
     const meta = authUser.user_metadata || {};
     const email = authUser.email || '';
 
-    // Build User Object
+    // Build Current User Object
     this.currentUser = {
       id: authUser.id,
       first_name: meta.first_name || email.split('@')[0] || 'مستثمر',
@@ -167,12 +279,21 @@ class DatabaseService {
       created_at: authUser.created_at || new Date().toISOString(),
     };
 
+    await this.fetchUserData(authUser.id);
+    this.setupRealtimeSubscription(authUser.id);
+  }
+
+  // --- Fetch all tables for a specific user directly from Supabase ---
+  async fetchUserData(userId: string): Promise<void> {
+    const supabase = getSupabase();
+    if (!supabase) return;
+
     try {
       // 1. Fetch Profile
-      const { data: profileRow, error: pErr } = await supabase
+      const { data: profileRow } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', authUser.id)
+        .eq('id', userId)
         .maybeSingle();
 
       if (profileRow) {
@@ -186,10 +307,10 @@ class DatabaseService {
           created_at: profileRow.created_at,
           updated_at: profileRow.updated_at,
         };
-      } else {
-        // Create initial profile in Supabase
+      } else if (this.currentUser) {
+        // Automatically create initial profile in Supabase if missing
         const initialProfile = {
-          id: authUser.id,
+          id: userId,
           first_name: this.currentUser.first_name,
           last_name: this.currentUser.last_name,
           phone: this.currentUser.phone,
@@ -203,7 +324,7 @@ class DatabaseService {
           qualified_referrals_count: 0,
         };
 
-        const { data: createdProf, error: insErr } = await supabase
+        const { data: createdProf } = await supabase
           .from('profiles')
           .insert(initialProfile)
           .select()
@@ -220,17 +341,6 @@ class DatabaseService {
             created_at: createdProf.created_at,
             updated_at: createdProf.updated_at,
           };
-        } else {
-          this.currentProfile = {
-            user_id: authUser.id,
-            current_level: 1,
-            total_balance: 0,
-            current_invested: 0,
-            total_profits: 0,
-            qualified_referrals_count: 0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
         }
       }
 
@@ -238,7 +348,7 @@ class DatabaseService {
       const { data: walletsData } = await supabase
         .from('wallets')
         .select('*')
-        .eq('user_id', authUser.id);
+        .eq('user_id', userId);
 
       if (walletsData && walletsData.length > 0) {
         this.userWallets = walletsData.map((w) => ({
@@ -248,14 +358,20 @@ class DatabaseService {
           balance: Number(w.balance || 0),
           usd_rate: Number(w.usd_rate || (w.currency === 'USDT' ? 1 : w.currency === 'BTC' ? 68500 : 3450)),
           address: w.address,
-          network: w.network || (w.currency === 'USDT' ? 'TRC20 (Tron)' : w.currency === 'BTC' ? 'Bitcoin Mainnet' : 'Ethereum (ERC20)'),
+          network:
+            w.network ||
+            (w.currency === 'USDT'
+              ? 'TRC20 (Tron)'
+              : w.currency === 'BTC'
+              ? 'Bitcoin Mainnet'
+              : 'Ethereum (ERC20)'),
           icon_name: w.currency === 'USDT' ? 'DollarSign' : w.currency === 'BTC' ? 'Bitcoin' : 'Coins',
         }));
       } else {
-        // Create initial wallets
+        // Initialize default wallets in Supabase for user
         const defaultWallets = [
           {
-            user_id: authUser.id,
+            user_id: userId,
             currency: 'USDT',
             network: 'TRC20 (Tron)',
             balance: 0.0,
@@ -263,7 +379,7 @@ class DatabaseService {
             address: 'TRX' + Math.random().toString(36).substring(2, 10).toUpperCase() + '9wK',
           },
           {
-            user_id: authUser.id,
+            user_id: userId,
             currency: 'BTC',
             network: 'Bitcoin Mainnet',
             balance: 0.0,
@@ -271,7 +387,7 @@ class DatabaseService {
             address: '1' + Math.random().toString(36).substring(2, 12).toUpperCase(),
           },
           {
-            user_id: authUser.id,
+            user_id: userId,
             currency: 'ETH',
             network: 'Ethereum (ERC20)',
             balance: 0.0,
@@ -303,7 +419,7 @@ class DatabaseService {
       const { data: invsData } = await supabase
         .from('investments')
         .select('*')
-        .eq('user_id', authUser.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (invsData) {
@@ -325,7 +441,7 @@ class DatabaseService {
       const { data: txData } = await supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', authUser.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (txData) {
@@ -346,7 +462,7 @@ class DatabaseService {
       const { data: refData } = await supabase
         .from('referrals')
         .select('*')
-        .eq('referrer_id', authUser.id)
+        .eq('referrer_id', userId)
         .order('registered_at', { ascending: false });
 
       if (refData) {
@@ -355,7 +471,7 @@ class DatabaseService {
           referrer_id: r.referrer_id,
           referred_user_id: r.referred_user_id,
           referred_name: r.referred_name || 'مستثمر',
-          referral_code: meta.referral_code || '',
+          referral_code: this.currentUser?.referral_code || '',
           registered_at: r.registered_at,
           status: r.status as 'registered' | 'qualified',
           invested_amount: Number(r.invested_amount || 0),
@@ -366,7 +482,7 @@ class DatabaseService {
       const { data: cycleData } = await supabase
         .from('daily_cycles')
         .select('*')
-        .eq('user_id', authUser.id)
+        .eq('user_id', userId)
         .eq('is_completed', false)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -375,20 +491,33 @@ class DatabaseService {
       if (cycleData) {
         const startMs = new Date(cycleData.started_at).getTime();
         const endMs = new Date(cycleData.ends_at).getTime();
-        this.userCycle = {
-          id: cycleData.id,
-          user_id: cycleData.user_id,
-          cycle_duration_seconds: (cycleData.duration_hours || 24) * 3600,
-          started_at: startMs,
-          ends_at: endMs,
-          return_calculated: 0,
-          status: 'running',
-        };
+        const now = Date.now();
+        if (endMs > now) {
+          this.userCycle = {
+            id: cycleData.id,
+            user_id: cycleData.user_id,
+            cycle_duration_seconds: (cycleData.duration_hours || 24) * 3600,
+            started_at: startMs,
+            ends_at: endMs,
+            return_calculated: 0,
+            status: 'running',
+          };
+        } else {
+          this.userCycle = {
+            id: 'cyc_' + userId + '_' + now,
+            user_id: userId,
+            cycle_duration_seconds: 24 * 3600,
+            started_at: now,
+            ends_at: now + CYCLE_DURATION_MS,
+            return_calculated: 0,
+            status: 'running',
+          };
+        }
       } else {
         const now = Date.now();
         this.userCycle = {
-          id: 'cyc_' + authUser.id,
-          user_id: authUser.id,
+          id: 'cyc_' + userId,
+          user_id: userId,
           cycle_duration_seconds: 24 * 3600,
           started_at: now,
           ends_at: now + CYCLE_DURATION_MS,
@@ -397,20 +526,68 @@ class DatabaseService {
         };
       }
     } catch (err) {
-      console.error('Error loading user data:', err);
+      console.error('Error in fetchUserData from Supabase:', err);
     }
 
     this.notify();
   }
 
-  // --- Auth Methods ---
+  // --- Realtime subscription to receive database updates instantly ---
+  private setupRealtimeSubscription(userId: string) {
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    if (this.realtimeChannel) {
+      supabase.removeChannel(this.realtimeChannel);
+    }
+
+    this.realtimeChannel = supabase
+      .channel(`user-sync-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
+        () => this.fetchUserData(userId)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${userId}` },
+        () => this.fetchUserData(userId)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
+        () => this.fetchUserData(userId)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'investments', filter: `user_id=eq.${userId}` },
+        () => this.fetchUserData(userId)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'investment_levels' },
+        () => this.fetchLevelsAndPlans()
+      )
+      .subscribe();
+  }
+
+  // --- Re-sync all user data ---
+  async refreshUserData(userId?: string): Promise<void> {
+    const targetId = userId || this.currentUser?.id;
+    if (targetId) {
+      await this.fetchUserData(targetId);
+    }
+    await this.fetchLevelsAndPlans();
+  }
+
+  // --- Auth Methods directly against Supabase Auth ---
   async loginUser(
     email: string,
     password?: string
   ): Promise<{ success: boolean; user?: User; error?: string }> {
     const supabase = getSupabase();
     if (!supabase) {
-      return { success: false, error: 'تعذر الاتصال بخدمة المصادقة.' };
+      return { success: false, error: 'تعذر الاتصال بقاعدة بيانات Supabase.' };
     }
 
     try {
@@ -462,7 +639,22 @@ class DatabaseService {
 
     try {
       const cleanEmail = params.email.trim().toLowerCase();
-      const referralCode = 'ARB' + Math.floor(1000 + Math.random() * 9000);
+      const referralCode = 'ARB' + Math.floor(100000 + Math.random() * 900000);
+      const cleanRefCode = params.referred_by_code?.trim().toUpperCase() || null;
+
+      // Check if referrer exists in Supabase
+      let referrerId: string | null = null;
+      if (cleanRefCode) {
+        const { data: referrerProf } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('referral_code', cleanRefCode)
+          .maybeSingle();
+
+        if (referrerProf) {
+          referrerId = referrerProf.id;
+        }
+      }
 
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
@@ -473,7 +665,7 @@ class DatabaseService {
             last_name: params.last_name.trim(),
             phone: params.phone.trim(),
             referral_code: referralCode,
-            referred_by_code: params.referred_by_code?.trim().toUpperCase() || null,
+            referred_by_code: cleanRefCode,
           },
         },
       });
@@ -488,16 +680,30 @@ class DatabaseService {
         return { success: false, error: msg };
       }
 
-      if (data.session && data.user) {
-        await this.handleUserSession(data.user);
-        return { success: true, user: this.currentUser || undefined };
-      } else if (data.user && !data.session) {
-        return {
-          success: true,
-          requiresEmailConfirmation: true,
-          message:
-            'تم إنشاء حسابك بنجاح! تم إرسال رابط تأكيد إلى بريدك الإلكتروني، يرجى النقر عليه لتفعيل حسابك ثم تسجيل الدخول.',
-        };
+      if (data.user) {
+        // Record referral row in Supabase referrals table if referrer exists
+        if (referrerId) {
+          await supabase.from('referrals').insert({
+            referrer_id: referrerId,
+            referred_user_id: data.user.id,
+            referred_name: `${params.first_name.trim()} ${params.last_name.trim()}`,
+            status: 'registered',
+            invested_amount: 0.0,
+            registered_at: new Date().toISOString(),
+          });
+        }
+
+        if (data.session) {
+          await this.handleUserSession(data.user);
+          return { success: true, user: this.currentUser || undefined };
+        } else {
+          return {
+            success: true,
+            requiresEmailConfirmation: true,
+            message:
+              'تم إنشاء حسابك بنجاح! تم إرسال رابط تأكيد إلى بريدك الإلكتروني، يرجى النقر عليه لتفعيل حسابك ثم تسجيل الدخول.',
+          };
+        }
       }
 
       return { success: false, error: 'فشل إتمام التسجيل.' };
@@ -506,44 +712,85 @@ class DatabaseService {
     }
   }
 
-  async logout() {
+  async logout(): Promise<void> {
     const supabase = getSupabase();
     if (supabase) {
       await supabase.auth.signOut();
     }
-    this.currentUser = null;
-    this.currentProfile = null;
-    this.userWallets = [];
-    this.userInvestments = [];
-    this.userTransactions = [];
-    this.userReferrals = [];
-    this.userCycle = null;
+    this.cleanupSession();
     this.notify();
   }
 
-  // --- Getters ---
+  // --- Getters (Preserving identical signatures for all components) ---
   getCurrentUser(): User | null {
     return this.currentUser;
   }
 
   getUserProfile(userId?: string): Profile | null {
-    return this.currentProfile;
+    if (this.currentProfile) return this.currentProfile;
+    if (this.currentUser) {
+      return {
+        user_id: this.currentUser.id,
+        current_level: 1,
+        total_balance: 0.0,
+        current_invested: 0.0,
+        total_profits: 0.0,
+        qualified_referrals_count: 0,
+        created_at: this.currentUser.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
+    return null;
   }
 
   getLevels(): InvestmentLevel[] {
-    return this.levels;
+    return this.levels && this.levels.length > 0 ? this.levels : DEFAULT_LEVELS;
   }
 
   getPlans(): InvestmentPlan[] {
-    return this.plans;
+    return this.plans && this.plans.length > 0 ? this.plans : DEFAULT_PLANS;
   }
 
   getPlansForLevel(levelNumber: number): InvestmentPlan[] {
-    return this.plans.filter((p) => p.level_id === levelNumber);
+    const plans = this.getPlans();
+    return plans.filter((p) => p.level_id === levelNumber);
   }
 
   getWallets(userId?: string): CryptoWallet[] {
-    return this.userWallets;
+    if (this.userWallets && this.userWallets.length > 0) return this.userWallets;
+    const uid = userId || this.currentUser?.id || 'usr';
+    return [
+      {
+        id: 'w_usdt',
+        user_id: uid,
+        currency: 'USDT',
+        network: 'TRC20 (Tron)',
+        balance: 0.0,
+        usd_rate: 1.0,
+        address: 'TRX7xK9pM3nL4vQ2wE1yZ8sT6uJ9wK',
+        icon_name: 'DollarSign',
+      },
+      {
+        id: 'w_btc',
+        user_id: uid,
+        currency: 'BTC',
+        network: 'Bitcoin Mainnet',
+        balance: 0.0,
+        usd_rate: 68500.0,
+        address: '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa',
+        icon_name: 'Bitcoin',
+      },
+      {
+        id: 'w_eth',
+        user_id: uid,
+        currency: 'ETH',
+        network: 'Ethereum (ERC20)',
+        balance: 0.0,
+        usd_rate: 3450.0,
+        address: '0x71C...4982a',
+        icon_name: 'Coins',
+      },
+    ];
   }
 
   getInvestments(userId?: string): Investment[] {
@@ -600,38 +847,18 @@ class DatabaseService {
         .update({ total_balance: newTotalBal })
         .eq('id', userId);
 
-      // Insert transaction
-      const { data: newTx } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          type: 'deposit',
-          amount: amount,
-          title: `إيداع محفظة ${currency}`,
-          description: `إيداع ناجح بقيمة ${amount} ${currency}`,
-          status: 'completed',
-        })
-        .select()
-        .maybeSingle();
+      // Insert transaction in Supabase
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        type: 'deposit',
+        amount: amount,
+        title: `إيداع محفظة ${currency}`,
+        description: `إيداع ناجح بقيمة ${amount} ${currency}`,
+        status: 'completed',
+      });
 
-      // Local optimistic update
-      if (wallet) wallet.balance = newWalletBal;
-      if (this.currentProfile) this.currentProfile.total_balance = newTotalBal;
-      if (newTx) {
-        this.userTransactions.unshift({
-          id: newTx.id,
-          user_id: userId,
-          type: 'deposit',
-          amount,
-          currency: 'USD',
-          status: 'completed',
-          title: newTx.title,
-          description: newTx.description,
-          created_at: newTx.created_at,
-        });
-      }
-
-      this.notify();
+      // Synchronize directly from Supabase
+      await this.fetchUserData(userId);
       return { success: true };
     } catch (e: any) {
       console.error('Deposit error:', e);
@@ -668,39 +895,19 @@ class DatabaseService {
         .update({ total_balance: newTotalBal })
         .eq('id', userId);
 
-      // Insert transaction (pending for admin approval / verification)
-      const { data: newTx } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          type: 'withdrawal',
-          amount: amount,
-          title: `طلب سحب ${currency}`,
-          description: `طلب سحب إلى العنوان: ${targetAddress}`,
-          status: 'pending',
-          metadata: { targetAddress, currency },
-        })
-        .select()
-        .maybeSingle();
+      // Insert transaction in Supabase (pending for admin approval / verification)
+      await supabase.from('transactions').insert({
+        user_id: userId,
+        type: 'withdrawal',
+        amount: amount,
+        title: `طلب سحب ${currency}`,
+        description: `طلب سحب إلى العنوان: ${targetAddress}`,
+        status: 'pending',
+        metadata: { targetAddress, currency },
+      });
 
-      // Local state update
-      wallet.balance = newWalletBal;
-      if (this.currentProfile) this.currentProfile.total_balance = newTotalBal;
-      if (newTx) {
-        this.userTransactions.unshift({
-          id: newTx.id,
-          user_id: userId,
-          type: 'withdrawal',
-          amount,
-          currency: 'USD',
-          status: 'pending',
-          title: newTx.title,
-          description: newTx.description,
-          created_at: newTx.created_at,
-        });
-      }
-
-      this.notify();
+      // Synchronize directly from Supabase
+      await this.fetchUserData(userId);
       return { success: true };
     } catch (e: any) {
       console.error('Withdrawal error:', e);
@@ -726,7 +933,7 @@ class DatabaseService {
       const now = new Date();
       const nextCycle = new Date(now.getTime() + CYCLE_DURATION_MS);
 
-      // 1. Insert Investment
+      // 1. Insert Investment into Supabase
       const { data: invRow, error: invErr } = await supabase
         .from('investments')
         .insert({
@@ -748,7 +955,7 @@ class DatabaseService {
         return { success: false, error: invErr.message };
       }
 
-      // 2. Update Profile Balance & Invested
+      // 2. Update Profile Balance & Invested in Supabase
       const newTotalBal = this.currentProfile.total_balance - params.amount;
       const newInvested = this.currentProfile.current_invested + params.amount;
 
@@ -760,23 +967,83 @@ class DatabaseService {
         })
         .eq('id', params.userId);
 
-      // 3. Insert Transaction
-      const { data: txRow } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: params.userId,
-          type: 'investment',
-          amount: params.amount,
-          title: `استثمار جديد - Level ${params.levelId}`,
-          description: `مبلغ $${params.amount} بعائد يومي متوقع $${params.expectedDailyReturn}`,
-          status: 'completed',
-        })
-        .select()
+      // 3. Insert Transaction into Supabase
+      await supabase.from('transactions').insert({
+        user_id: params.userId,
+        type: 'investment',
+        amount: params.amount,
+        title: `استثمار جديد - Level ${params.levelId}`,
+        description: `مبلغ $${params.amount} بعائد يومي متوقع $${params.expectedDailyReturn}`,
+        status: 'completed',
+      });
+
+      // 4. Check if this user was referred by someone and update referral status to qualified
+      const { data: refRecord } = await supabase
+        .from('referrals')
+        .select('*')
+        .eq('referred_user_id', params.userId)
+        .eq('status', 'registered')
         .maybeSingle();
 
-      // 4. Update local state
-      this.currentProfile.total_balance = newTotalBal;
-      this.currentProfile.current_invested = newInvested;
+      if (refRecord) {
+        await supabase
+          .from('referrals')
+          .update({
+            status: 'qualified',
+            invested_amount: params.amount,
+            qualified_at: now.toISOString(),
+          })
+          .eq('id', refRecord.id);
+
+        const { data: refProfile } = await supabase
+          .from('profiles')
+          .select('id, qualified_referrals_count, total_balance, total_profits')
+          .eq('id', refRecord.referrer_id)
+          .maybeSingle();
+
+        if (refProfile) {
+          const newQ = (refProfile.qualified_referrals_count || 0) + 1;
+          const referralBonus = 5.0; // $5 instant bonus for referrer
+          await supabase
+            .from('profiles')
+            .update({
+              qualified_referrals_count: newQ,
+              total_balance: Number(refProfile.total_balance || 0) + referralBonus,
+              total_profits: Number(refProfile.total_profits || 0) + referralBonus,
+            })
+            .eq('id', refProfile.id);
+
+          await supabase.from('transactions').insert({
+            user_id: refProfile.id,
+            type: 'referral_bonus',
+            amount: referralBonus,
+            title: 'مكافأة إحالة مؤهلة استثمرت',
+            description: `مكافأة تأهل إحالتك بقيمة $${referralBonus}`,
+            status: 'completed',
+          });
+        }
+      }
+
+      // 5. Ensure active daily cycle in Supabase
+      const { data: existingCycle } = await supabase
+        .from('daily_cycles')
+        .select('id')
+        .eq('user_id', params.userId)
+        .eq('is_completed', false)
+        .maybeSingle();
+
+      if (!existingCycle) {
+        await supabase.from('daily_cycles').insert({
+          user_id: params.userId,
+          started_at: now.toISOString(),
+          ends_at: nextCycle.toISOString(),
+          duration_hours: 24,
+          is_completed: false,
+        });
+      }
+
+      // Synchronize directly from Supabase
+      await this.fetchUserData(params.userId);
 
       const createdInvestment: Investment = {
         id: invRow.id,
@@ -791,23 +1058,6 @@ class DatabaseService {
         created_at: invRow.created_at,
       };
 
-      this.userInvestments.unshift(createdInvestment);
-
-      if (txRow) {
-        this.userTransactions.unshift({
-          id: txRow.id,
-          user_id: params.userId,
-          type: 'investment',
-          amount: params.amount,
-          currency: 'USD',
-          status: 'completed',
-          title: txRow.title,
-          description: txRow.description,
-          created_at: txRow.created_at,
-        });
-      }
-
-      this.notify();
       return { success: true, investment: createdInvestment };
     } catch (e: any) {
       console.error('Investment creation error:', e);
@@ -827,7 +1077,39 @@ class DatabaseService {
       0
     );
 
+    const now = new Date();
+    const nextCycle = new Date(now.getTime() + CYCLE_DURATION_MS);
+
+    // Immediately reset in-memory cycle to advance timer and prevent loop
+    this.userCycle = {
+      id: 'cyc_' + userId + '_' + now.getTime(),
+      user_id: userId,
+      cycle_duration_seconds: 24 * 3600,
+      started_at: now.getTime(),
+      ends_at: nextCycle.getTime(),
+      return_calculated: 0,
+      status: 'running',
+    };
+
     if (totalDailyReturn <= 0 || !this.currentProfile) {
+      // Advance cycle in Supabase even when there are no active returns
+      try {
+        await supabase
+          .from('daily_cycles')
+          .update({ is_completed: true, processed_at: now.toISOString() })
+          .eq('user_id', userId)
+          .eq('is_completed', false);
+
+        await supabase.from('daily_cycles').insert({
+          user_id: userId,
+          started_at: now.toISOString(),
+          ends_at: nextCycle.toISOString(),
+          duration_hours: 24,
+          is_completed: false,
+        });
+      } catch (err) {
+        console.warn('Could not roll over empty cycle:', err);
+      }
       return { returnedAmount: 0 };
     }
 
@@ -844,50 +1126,36 @@ class DatabaseService {
         })
         .eq('id', userId);
 
-      // Record transaction
-      const { data: txRow } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          type: 'return',
-          amount: totalDailyReturn,
-          title: 'عائد الدورة اليومية المكتملة',
-          description: `تم إضافة العائد اليومي بقيمة $${totalDailyReturn.toFixed(2)} بنجاح إلى رصيدك.`,
-          status: 'completed',
-        })
-        .select()
-        .maybeSingle();
-
-      // Reset local cycle
-      const now = Date.now();
-      this.userCycle = {
-        id: 'cyc_' + now,
+      // Record return transaction in Supabase
+      await supabase.from('transactions').insert({
         user_id: userId,
-        cycle_duration_seconds: 24 * 3600,
-        started_at: now,
-        ends_at: now + CYCLE_DURATION_MS,
-        return_calculated: totalDailyReturn,
-        status: 'running',
-      };
+        type: 'return',
+        amount: totalDailyReturn,
+        title: 'عائد الدورة اليومية المكتملة',
+        description: `تم إضافة العائد اليومي بقيمة $${totalDailyReturn.toFixed(2)} بنجاح إلى رصيدك.`,
+        status: 'completed',
+      });
 
-      this.currentProfile.total_balance = newTotalBal;
-      this.currentProfile.total_profits = newProfits;
+      // Mark current cycle as completed and start new 24h cycle
+      const now = new Date();
+      const nextCycle = new Date(now.getTime() + CYCLE_DURATION_MS);
 
-      if (txRow) {
-        this.userTransactions.unshift({
-          id: txRow.id,
-          user_id: userId,
-          type: 'return',
-          amount: totalDailyReturn,
-          currency: 'USD',
-          status: 'completed',
-          title: txRow.title,
-          description: txRow.description,
-          created_at: txRow.created_at,
-        });
-      }
+      await supabase
+        .from('daily_cycles')
+        .update({ is_completed: true, processed_at: now.toISOString() })
+        .eq('user_id', userId)
+        .eq('is_completed', false);
 
-      this.notify();
+      await supabase.from('daily_cycles').insert({
+        user_id: userId,
+        started_at: now.toISOString(),
+        ends_at: nextCycle.toISOString(),
+        duration_hours: 24,
+        is_completed: false,
+      });
+
+      // Refresh directly from Supabase
+      await this.fetchUserData(userId);
       return { returnedAmount: totalDailyReturn };
     } catch (e) {
       console.error('Cycle completion error:', e);
@@ -895,7 +1163,7 @@ class DatabaseService {
     }
   }
 
-  // --- Real Admin queries for `/secure-admin` ---
+  // --- Real Admin queries for `/secure-admin` from Supabase ---
   async checkIsAdmin(): Promise<boolean> {
     const supabase = getSupabase();
     if (!supabase) return false;
@@ -907,7 +1175,7 @@ class DatabaseService {
 
       if (!user) return false;
 
-      // Check admin emails or metadata
+      // Check configured admin emails or metadata
       const adminEmails = ['wahablila31000@gmail.com', 'admin@invest-profit.com'];
       if (adminEmails.includes(user.email || '')) return true;
 
@@ -918,7 +1186,7 @@ class DatabaseService {
         return true;
       }
 
-      // Check profile role if available
+      // Check profile role column in Supabase
       const { data: prof } = await supabase
         .from('profiles')
         .select('role')
@@ -971,28 +1239,66 @@ class DatabaseService {
   ): Promise<{ success: boolean }> {
     const supabase = getSupabase();
     if (!supabase) return { success: false };
-    const { error } = await supabase
-      .from('transactions')
-      .update({ status })
-      .eq('id', txId);
-    return { success: !error };
+
+    try {
+      // If rejecting a withdrawal, refund the balance back to the user
+      if (status === 'failed') {
+        const { data: tx } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('id', txId)
+          .maybeSingle();
+
+        if (tx && tx.type === 'withdrawal' && tx.status === 'pending') {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('total_balance')
+            .eq('id', tx.user_id)
+            .maybeSingle();
+
+          if (prof) {
+            await supabase
+              .from('profiles')
+              .update({ total_balance: Number(prof.total_balance || 0) + Number(tx.amount) })
+              .eq('id', tx.user_id);
+          }
+        }
+      }
+
+      const { error } = await supabase
+        .from('transactions')
+        .update({ status })
+        .eq('id', txId);
+
+      return { success: !error };
+    } catch (e) {
+      console.error('Error updating transaction status:', e);
+      return { success: false };
+    }
   }
 
   async toggleLevelUnlockForAdmin(
-    levelId: number,
+    levelNumber: number,
     isUnlocked: boolean
   ): Promise<{ success: boolean }> {
-    const supabase = getSupabase();
-    if (!supabase) return { success: false };
-    const { error } = await supabase
+    const client = getSupabase();
+    if (!client) return { success: false };
+    const { error } = await client
       .from('investment_levels')
       .update({ is_unlocked: isUnlocked })
-      .eq('id', levelId);
+      .eq('level_number', levelNumber);
+
     if (!error) {
       await this.fetchLevelsAndPlans();
     }
     return { success: !error };
   }
+
+  // Direct access to the Supabase client instance
+  get supabaseClient(): SupabaseClient | null {
+    return supabase;
+  }
 }
 
 export const db = new DatabaseService();
+

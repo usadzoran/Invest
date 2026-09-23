@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Clock, CheckCircle2, Zap } from 'lucide-react';
 import { db, CYCLE_DURATION_MS } from '../../services/storage';
 
@@ -28,6 +28,12 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   });
 
   const [cycleCompletedBanner, setCycleCompletedBanner] = useState<number | null>(null);
+  const isProcessingRef = useRef<boolean>(false);
+  const onCycleCompletedRef = useRef(onCycleCompleted);
+
+  useEffect(() => {
+    onCycleCompletedRef.current = onCycleCompleted;
+  }, [onCycleCompleted]);
 
   useEffect(() => {
     const cycle = db.getUserDailyCycle(userId);
@@ -37,14 +43,26 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
       const difference = cycle.ends_at - now;
 
       if (difference <= 0) {
+        if (isProcessingRef.current) return;
+        isProcessingRef.current = true;
+
         // Cycle reached 00:00:00! Process cycle return
-        db.processCycleCompletion(userId).then((result) => {
-          setCycleCompletedBanner(result.returnedAmount);
-          if (onCycleCompleted) {
-            onCycleCompleted(result.returnedAmount);
-          }
-          setTimeout(() => setCycleCompletedBanner(null), 6000);
-        });
+        db.processCycleCompletion(userId)
+          .then((result) => {
+            setCycleCompletedBanner(result.returnedAmount);
+            if (onCycleCompletedRef.current) {
+              onCycleCompletedRef.current(result.returnedAmount);
+            }
+            setTimeout(() => setCycleCompletedBanner(null), 6000);
+          })
+          .catch((err) => {
+            console.error('Error in cycle completion:', err);
+          })
+          .finally(() => {
+            setTimeout(() => {
+              isProcessingRef.current = false;
+            }, 3000);
+          });
         return;
       }
 
@@ -53,7 +71,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
       const minutes = Math.floor((totalSeconds % 3600) / 60);
       const seconds = totalSeconds % 60;
 
-      const elapsed = CYCLE_DURATION_MS - difference;
+      const elapsed = Math.max(0, CYCLE_DURATION_MS - difference);
       const percent = Math.min(100, Math.max(0, (elapsed / CYCLE_DURATION_MS) * 100));
 
       setTimeLeft({
@@ -69,7 +87,8 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [userId, onCycleCompleted]);
+  }, [userId]);
+
 
   // Handler for quick test simulation: instantly completes cycle
   const handleFastForward = async () => {

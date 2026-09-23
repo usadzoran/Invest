@@ -152,7 +152,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({ user }) => {
                   </div>
 
                   <div className="text-left shrink-0">
-                    {tx.amount > 0 && (
+                    {Number(tx.amount) > 0 && (
                       <span
                         dir="ltr"
                         className={`text-base font-black font-mono tabular-nums ${
@@ -163,7 +163,7 @@ export const OperationsView: React.FC<OperationsViewProps> = ({ user }) => {
                             : 'text-slate-300'
                         }`}
                       >
-                        {isPositive ? '+' : isNegative ? '-' : ''}${tx.amount.toFixed(2)}
+                        {isPositive ? '+' : isNegative ? '-' : ''}${(Number(tx.amount) || 0).toFixed(2)}
                       </span>
                     )}
 
