@@ -96,7 +96,14 @@ export default function App() {
     return (
       <AdminSecureView
         onExit={() => {
-          window.history.pushState({}, '', '/');
+          const basePath = window.location.pathname.toLowerCase().includes('/invest')
+            ? '/Invest/'
+            : window.location.pathname.replace(/\/secure-admin\/?$/i, '') || '/';
+          if (window.location.hash) {
+            window.location.hash = '';
+          } else {
+            window.history.pushState({}, '', basePath);
+          }
           setRoute('main');
           setCurrentTab('home');
         }}

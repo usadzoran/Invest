@@ -11,7 +11,12 @@ import {
 } from '../types/database';
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 
-// Retrieve Supabase credentials from Vite import.meta.env, process.env, or localStorage
+// Production Supabase configuration (matches active project)
+const DEFAULT_SUPABASE_URL = 'https://ibpdmvsimyjbafhxwtrb.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlicGRtdnNpbXlqYmFmaHh3dHJiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNzM0MjksImV4cCI6MjEwNTY0OTQyOX0.eFRgiJqjlgX8DCvtRp580LO1hz338nCjjb2enS83I8Q';
+
+// Retrieve Supabase credentials from Vite import.meta.env, process.env, localStorage, or project defaults
 const getEnvVar = (key: string): string => {
   try {
     if (typeof import.meta !== 'undefined' && (import.meta as any).env?.[key]) {
@@ -33,10 +38,14 @@ const localUrl = typeof window !== 'undefined' ? localStorage.getItem('invest_ap
 const localKey = typeof window !== 'undefined' ? localStorage.getItem('invest_app_supabase_key') || '' : '';
 
 export const SUPABASE_URL: string =
-  (envUrl && envUrl !== 'https://your-project.supabase.co' ? envUrl.trim() : '') || localUrl.trim();
+  (envUrl && envUrl !== 'https://your-project.supabase.co' ? envUrl.trim() : '') ||
+  localUrl.trim() ||
+  DEFAULT_SUPABASE_URL;
 
 export const SUPABASE_ANON_KEY: string =
-  (envKey && envKey !== 'your-anon-public-key' ? envKey.trim() : '') || localKey.trim();
+  (envKey && envKey !== 'your-anon-public-key' ? envKey.trim() : '') ||
+  localKey.trim() ||
+  DEFAULT_SUPABASE_ANON_KEY;
 
 // Export the initialized Supabase client instance
 export const supabase: SupabaseClient | null =

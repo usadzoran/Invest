@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>استثمر واربح | جاري التوجيه...</title>
+    <script type="text/javascript">
+      // GitHub Pages SPA redirect
+      var pathSegmentsToKeep = 1; // 1 for project repository GitHub Pages: /Invest/
+      var l = window.location;
+      var repoPath = l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/');
+      var routePath = l.pathname.slice(repoPath.length) + l.search + l.hash;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        repoPath + '/#' + routePath
+      );
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
